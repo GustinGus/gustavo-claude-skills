@@ -1,0 +1,4 @@
+# ui-ux-pro-max: catalog-summary.json stores sha256 hashes of these data files,
+# so they must keep LF line endings on every platform (mirrors upstream .gitattributes).
+skills/ui-ux-pro-max/data/*.csv    text eol=lf
+skills/ui-ux-pro-max/data/*.json   text eol=lf
