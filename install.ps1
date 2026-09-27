@@ -9,6 +9,8 @@
       origem sem confirmacao e faz backup antes de substituir.
     - Etapa 2: o Chrome DevTools MCP no escopo user, via "claude mcp add", com as flags
       --isolated --no-usage-statistics --no-performance-crux (no Windows, via "cmd /c npx").
+    - Etapa 3 (opcional, -WithImpeccable): o Impeccable pelo instalador oficial
+      (npx impeccable install, escopo global, sem hooks), sempre com confirmacao.
     Pode ser executado quantas vezes quiser.
 
     Global:  %USERPROFILE%\.claude\skills  (ou $env:CLAUDE_CONFIG_DIR\skills)
@@ -30,8 +32,15 @@
 .PARAMETER SkipMcp
     Nao configura servidores MCP (so as skills).
 
+.PARAMETER WithImpeccable
+    Instala o Impeccable (dependencia externa opcional) pelo instalador oficial.
+    Mostra o comando e pede confirmacao; com -NonInteractive so executa se -Force tambem for usado.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\install.ps1 -WithImpeccable
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope Project -ProjectPath C:\dev\meu-site -WhatIf
@@ -46,7 +55,8 @@ param(
     [string] $ProjectPath = (Get-Location).Path,
     [switch] $Force,
     [switch] $NonInteractive,
-    [switch] $SkipMcp
+    [switch] $SkipMcp,
+    [switch] $WithImpeccable
 )
 
 Set-StrictMode -Version 2.0
@@ -58,6 +68,7 @@ Import-Module (Join-Path $LibDir 'Common.psm1') -Force
 Import-Module (Join-Path $LibDir 'Prereqs.psm1') -Force
 Import-Module (Join-Path $LibDir 'Skills.psm1') -Force
 Import-Module (Join-Path $LibDir 'Mcp.psm1') -Force
+Import-Module (Join-Path $LibDir 'External.psm1') -Force
 
 $dryRun = [bool]$WhatIfPreference
 
@@ -90,7 +101,7 @@ try {
     Initialize-Installer -StateRoot $stateRoot -DryRun:$dryRun
 
     Write-Host ''
-    Write-Log 'gustavo-claude-skills - instalador (skills + MCP)' 'STEP'
+    Write-Log 'gustavo-claude-skills - instalador (skills + MCP + externas)' 'STEP'
     if ($dryRun) { Write-Log 'Modo -WhatIf: nada sera alterado.' 'WARN' }
     $configSource = if ($env:CLAUDE_CONFIG_DIR) { 'CLAUDE_CONFIG_DIR' } else { 'padrao' }
     Write-Log "Pasta do Claude Code: $configDir ($configSource)" 'INFO'
@@ -103,6 +114,7 @@ try {
     $skills = @($manifest.skills)
     if ($skills.Count -eq 0) { throw 'manifest.json nao lista nenhuma skill.' }
     $mcpServers = @(Get-Prop $manifest 'mcp' @())
+    $externals = @(Get-Prop $manifest 'external' @())
 
     # ------------------------------------------------------------ pre-requisitos
     Write-Host ''
@@ -141,6 +153,24 @@ try {
                 Write-Log "MCP: falha inesperada - $($_.Exception.Message)" 'ERROR'
                 Write-LogFile ($_ | Out-String)
                 Add-Result 'MCP' 'geral' 'FAILED' $_.Exception.Message
+            }
+        }
+
+        # -------------------------------------------------------- dependencias externas
+        # Opcionais e isoladas: uma falha aqui nao desfaz nem altera skills ou MCP.
+        if ($externals.Count -gt 0) {
+            Write-Host ''
+            Write-Log "Depend$([char]0x00EA)ncias externas ($($externals.Count))" 'STEP'
+            $enabled = @()
+            if ($WithImpeccable) { $enabled += 'impeccable' }
+            try {
+                Install-ExternalDependencies -Dependencies $externals -Enabled $enabled `
+                    -Force:$Force -NonInteractive:$NonInteractive
+            }
+            catch {
+                Write-Log "Dependencias externas: falha inesperada - $($_.Exception.Message)" 'ERROR'
+                Write-LogFile ($_ | Out-String)
+                Add-Result 'Externas' 'geral' 'FAILED' $_.Exception.Message
             }
         }
 

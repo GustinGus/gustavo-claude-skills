@@ -38,5 +38,45 @@
       "forbiddenArgs": ["--autoConnect", "--auto-connect", "--browserUrl", "--browser-url", "-u", "--wsEndpoint", "--ws-endpoint", "-w"],
       "requires": { "node": "20.19.0", "npx": true, "chrome": true }
     }
+  ],
+  "external": [
+    {
+      "name": "impeccable",
+      "displayName": "Impeccable",
+      "optional": true,
+      "switch": "WithImpeccable",
+      "source": "https://github.com/pbakaus/impeccable",
+      "license": "Apache-2.0",
+      "scope": "global",
+      "supportedScopes": ["global", "project"],
+      "install": {
+        "method": "npx",
+        "package": "impeccable",
+        "version": "latest",
+        "versionStrategy": "npx resolve impeccable@latest a cada execucao; o instalador oficial baixa o pacote assinado mais recente da skill",
+        "args": ["install", "-y", "--providers=claude", "--scope=global", "--no-hooks"],
+        "requiredArgs": ["--providers=claude", "--scope=global", "--no-hooks"],
+        "forbiddenArgs": ["--project", "--local", "--scope=project"],
+        "updateHint": "npx -y impeccable@latest update -y --scope=global --no-hooks"
+      },
+      "requires": { "node": "22.18.0", "npx": true, "network": true },
+      "detect": {
+        "root": "claude-home",
+        "requiredFiles": [
+          "skills/impeccable/SKILL.md",
+          "skills/impeccable/scripts/impeccable",
+          "skills/impeccable/scripts/impeccable.cmd"
+        ],
+        "requiredGlobs": [
+          { "pattern": "agents/impeccable-*.md", "min": 1 }
+        ],
+        "versionFile": "skills/impeccable/SKILL.md"
+      },
+      "notes": [
+        "Grava em ~/.claude/skills/impeccable e ~/.claude/agents (agents impeccable-*).",
+        "Sem hooks (--no-hooks): os hooks serao opcionais por projeto.",
+        "No primeiro uso, a skill baixa o motor do Impeccable para dentro da propria pasta ou ~/.impeccable/bin."
+      ]
+    }
   ]
 }
