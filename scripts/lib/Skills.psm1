@@ -65,13 +65,26 @@ function Get-StringSha256 {
     finally { $sha.Dispose() }
 }
 
+# Nao usa Get-FileHash: no Windows PowerShell 5.1 ele e uma funcao com SupportsShouldProcess
+# e, com -WhatIf, herda $WhatIfPreference e nao retorna nada.
+function Get-FileSha256 {
+    param([Parameter(Mandatory)] [string] $Path)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $bytes = $sha.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($bytes) -replace '-', '').ToLowerInvariant()
+    }
+    finally { $stream.Dispose(); $sha.Dispose() }
+}
+
 # Hash da arvore: caminho relativo + hash de cada arquivo, em ordem ordinal.
 function Get-TreeHash {
     param([Parameter(Mandatory)] [string] $Root)
     $files = Get-SkillFiles $Root
     $map = @{}
     foreach ($f in $files) {
-        $map[$f.Rel] = (Get-FileHash -LiteralPath $f.Full -Algorithm SHA256).Hash.ToLowerInvariant()
+        $map[$f.Rel] = Get-FileSha256 $f.Full
     }
     $keys = [string[]]@($map.Keys)
     [System.Array]::Sort($keys, [System.StringComparer]::Ordinal)
