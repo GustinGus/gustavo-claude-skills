@@ -66,11 +66,26 @@ function Get-Results { return , $script:Results.ToArray() }
 
 function Write-Summary {
     $colors = @{ OK = 'Green'; UPDATED = 'Green'; SKIPPED = 'Gray'; WHATIF = 'Cyan'; WARN = 'Yellow'; PENDING = 'Yellow'; FAILED = 'Red' }
+    $titles = [ordered]@{
+        Instalador  = 'Instalador'
+        Prereqs     = 'Pre-requisitos'
+        Skills      = 'Skills'
+        MCP         = 'Chrome DevTools MCP'
+        Verificacao = 'Verificacao final'
+    }
     Write-Host ''
     Write-Host '== Resumo' -ForegroundColor Cyan
-    foreach ($r in $script:Results) {
-        $line = '{0,-9} {1,-12} {2,-30} {3}' -f $r.Status, $r.Step, $r.Item, $r.Message
-        Write-Host $line -ForegroundColor $colors[$r.Status]
+    $steps = @($titles.Keys) + @($script:Results | ForEach-Object { $_.Step } | Where-Object { -not $titles.Contains($_) } | Select-Object -Unique)
+    foreach ($step in $steps) {
+        $group = @($script:Results | Where-Object { $_.Step -eq $step })
+        if ($group.Count -eq 0) { continue }
+        $title = if ($titles.Contains($step)) { $titles[$step] } else { $step }
+        Write-Host ''
+        Write-Host "-- $title" -ForegroundColor Cyan
+        foreach ($r in $group) {
+            $line = '{0,-9} {1,-12} {2,-30} {3}' -f $r.Status, $r.Step, $r.Item, $r.Message
+            Write-Host $line -ForegroundColor $colors[$r.Status]
+        }
     }
     if ($script:LogFile) {
         Write-Host ''

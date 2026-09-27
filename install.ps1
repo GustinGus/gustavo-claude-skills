@@ -3,10 +3,13 @@
     Instala as skills da biblioteca gustavo-claude-skills no Claude Code.
 
 .DESCRIPTION
-    Etapa 1 do instalador: somente as skills listadas em manifest.json.
-    - Copia a pasta completa de cada skill (arquivos auxiliares e licencas incluidos).
-    - Nunca substitui uma skill modificada ou de outra origem sem confirmacao.
-    - Faz backup antes de substituir e pode ser executado quantas vezes quiser.
+    Instala o que esta em manifest.json:
+    - Etapa 1: as skills da biblioteca. Copia a pasta completa de cada uma (arquivos
+      auxiliares e licencas incluidos), nunca substitui uma skill modificada ou de outra
+      origem sem confirmacao e faz backup antes de substituir.
+    - Etapa 2: o Chrome DevTools MCP no escopo user, via "claude mcp add", com as flags
+      --isolated --no-usage-statistics --no-performance-crux (no Windows, via "cmd /c npx").
+    Pode ser executado quantas vezes quiser.
 
     Global:  %USERPROFILE%\.claude\skills  (ou $env:CLAUDE_CONFIG_DIR\skills)
     Projeto: <ProjectPath>\.claude\skills
@@ -24,6 +27,9 @@
 .PARAMETER NonInteractive
     Nunca pergunta. Conflitos sao mantidos como estao e marcados como pendentes.
 
+.PARAMETER SkipMcp
+    Nao configura servidores MCP (so as skills).
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1
 
@@ -39,7 +45,8 @@ param(
     [string] $Scope = 'User',
     [string] $ProjectPath = (Get-Location).Path,
     [switch] $Force,
-    [switch] $NonInteractive
+    [switch] $NonInteractive,
+    [switch] $SkipMcp
 )
 
 Set-StrictMode -Version 2.0
@@ -50,6 +57,7 @@ $LibDir = Join-Path (Join-Path $RepoRoot 'scripts') 'lib'
 Import-Module (Join-Path $LibDir 'Common.psm1') -Force
 Import-Module (Join-Path $LibDir 'Prereqs.psm1') -Force
 Import-Module (Join-Path $LibDir 'Skills.psm1') -Force
+Import-Module (Join-Path $LibDir 'Mcp.psm1') -Force
 
 $dryRun = [bool]$WhatIfPreference
 
@@ -82,7 +90,7 @@ try {
     Initialize-Installer -StateRoot $stateRoot -DryRun:$dryRun
 
     Write-Host ''
-    Write-Log 'gustavo-claude-skills - instalador (etapa 1: skills)' 'STEP'
+    Write-Log 'gustavo-claude-skills - instalador (skills + MCP)' 'STEP'
     if ($dryRun) { Write-Log 'Modo -WhatIf: nada sera alterado.' 'WARN' }
     $configSource = if ($env:CLAUDE_CONFIG_DIR) { 'CLAUDE_CONFIG_DIR' } else { 'padrao' }
     Write-Log "Pasta do Claude Code: $configDir ($configSource)" 'INFO'
@@ -94,6 +102,7 @@ try {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $skills = @($manifest.skills)
     if ($skills.Count -eq 0) { throw 'manifest.json nao lista nenhuma skill.' }
+    $mcpServers = @(Get-Prop $manifest 'mcp' @())
 
     # ------------------------------------------------------------ pre-requisitos
     Write-Host ''
@@ -113,15 +122,44 @@ try {
         Install-Skills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir -StateRoot $stateRoot `
             -Force:$Force -NonInteractive:$NonInteractive
 
+        # -------------------------------------------------------- MCP
+        # Qualquer falha aqui fica restrita ao MCP: as skills ja foram instaladas acima.
+        Write-Host ''
+        Write-Log "MCP ($($mcpServers.Count))" 'STEP'
+        if ($SkipMcp) {
+            foreach ($m in $mcpServers) {
+                Write-Log "$($m.name): pulado (-SkipMcp)." 'INFO'
+                Add-Result 'MCP' $m.name 'SKIPPED' 'pulado (-SkipMcp)'
+            }
+        }
+        elseif ($mcpServers.Count -gt 0) {
+            try {
+                Install-McpServers -Servers $mcpServers -ClaudePath $claude.Path -StateRoot $stateRoot `
+                    -Force:$Force -NonInteractive:$NonInteractive
+            }
+            catch {
+                Write-Log "MCP: falha inesperada - $($_.Exception.Message)" 'ERROR'
+                Write-LogFile ($_ | Out-String)
+                Add-Result 'MCP' 'geral' 'FAILED' $_.Exception.Message
+            }
+        }
+
         # -------------------------------------------------------- verificacao
         Write-Host ''
         Write-Log 'Verificacao' 'STEP'
         if ($dryRun) {
-            Write-Log 'Verificacao dos arquivos pulada no modo -WhatIf.' 'INFO'
+            Write-Log 'Verificacao pulada no modo -WhatIf.' 'INFO'
         }
         else {
             Test-InstalledSkills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir `
                 -OtherSkillsDir $otherSkillsDir -Python $python
+            if (-not $SkipMcp -and $mcpServers.Count -gt 0) {
+                try { Test-McpServers -Servers $mcpServers }
+                catch {
+                    Write-Log "Verificacao do MCP falhou - $($_.Exception.Message)" 'ERROR'
+                    Add-Result 'MCP' 'verificacao' 'FAILED' $_.Exception.Message
+                }
+            }
         }
     }
 }

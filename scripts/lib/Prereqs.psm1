@@ -73,4 +73,103 @@ function Test-Python {
     return $null
 }
 
-Export-ModuleMember -Function Invoke-External, Test-ClaudeCode, Find-Python, Test-Python
+# ---------------------------------------------------------------- Node.js, npm/npx, Chrome
+
+function Get-NodeInfo {
+    $cmd = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $cmd) { return $null }
+    $run = Invoke-External $cmd.Source @('--version')
+    if ($run.ExitCode -ne 0 -or $run.Output -notmatch 'v?(\d+\.\d+\.\d+)') { return $null }
+    return [pscustomobject]@{ Path = $cmd.Source; Version = [version]$Matches[1] }
+}
+
+# Retorna o Node encontrado se atender a versao minima; caso contrario registra FAILED em $Step.
+function Test-Node {
+    param([Parameter(Mandatory)] [string] $MinVersion, [Parameter(Mandatory)] [string] $Step, [string] $Item = 'Node.js')
+    $node = Get-NodeInfo
+    if (-not $node) {
+        Write-Log "Node.js nao encontrado (necessario >= $MinVersion)." 'ERROR'
+        Write-Log 'Sugestao: winget install OpenJS.NodeJS.LTS  (depois abra um novo terminal)' 'DETAIL'
+        Add-Result $Step $Item 'FAILED' "Node.js nao encontrado (necessario >= $MinVersion)"
+        return $null
+    }
+    if ($node.Version -lt [version]$MinVersion) {
+        Write-Log "Node.js $($node.Version) e antigo demais (necessario >= $MinVersion)." 'ERROR'
+        Write-Log 'Sugestao: winget upgrade OpenJS.NodeJS.LTS' 'DETAIL'
+        Add-Result $Step $Item 'FAILED' "versao $($node.Version) < $MinVersion"
+        return $null
+    }
+    Write-Log "Node.js: $($node.Version)" 'OK'
+    Add-Result $Step $Item 'OK' "$($node.Version)"
+    return $node
+}
+
+# npm e npx vem com o Node. No Windows sao npm.cmd / npx.cmd (Application).
+function Test-NpmNpx {
+    param([Parameter(Mandatory)] [string] $Step)
+    $ok = $true
+    foreach ($tool in @('npm', 'npx')) {
+        $cmd = Get-Command $tool -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $version = $null
+        if ($cmd) {
+            $run = Invoke-External $cmd.Source @('--version')
+            if ($run.ExitCode -eq 0) { $version = ($run.Output -split "`n" | Select-Object -Last 1).Trim() }
+        }
+        if ($version) {
+            Write-Log "${tool}: $version" 'OK'
+            Add-Result $Step $tool 'OK' $version
+        }
+        else {
+            Write-Log "$tool nao encontrado ou nao executa (vem junto com o Node.js)." 'ERROR'
+            Add-Result $Step $tool 'FAILED' 'nao encontrado; reinstale o Node.js LTS'
+            $ok = $false
+        }
+    }
+    return $ok
+}
+
+function Find-Chrome {
+    $isWin = ($PSVersionTable.PSEdition -eq 'Desktop') -or [bool](Get-Variable -Name IsWindows -ValueOnly -ErrorAction SilentlyContinue)
+    $isMac = [bool](Get-Variable -Name IsMacOS -ValueOnly -ErrorAction SilentlyContinue)
+    $candidates = @()
+    if ($isWin) {
+        foreach ($base in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)) {
+            if ($base) { $candidates += (Join-Path $base 'Google\Chrome\Application\chrome.exe') }
+        }
+        foreach ($hive in @('HKLM:', 'HKCU:')) {
+            $key = "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"
+            $item = Get-ItemProperty -Path $key -ErrorAction SilentlyContinue
+            if ($item -and $item.PSObject.Properties['(default)']) { $candidates += $item.'(default)' }
+        }
+    }
+    elseif ($isMac) {
+        $candidates += '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+    }
+    else {
+        foreach ($name in @('google-chrome', 'google-chrome-stable')) {
+            $cmd = Get-Command $name -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($cmd) { $candidates += $cmd.Source }
+        }
+    }
+    foreach ($c in $candidates) {
+        if ($c -and (Test-Path -LiteralPath $c -PathType Leaf)) { return $c }
+    }
+    return $null
+}
+
+function Test-Chrome {
+    param([Parameter(Mandatory)] [string] $Step)
+    $chrome = Find-Chrome
+    if ($chrome) {
+        Write-Log "Google Chrome: $chrome" 'OK'
+        Add-Result $Step 'Google Chrome' 'OK' $chrome
+        return $chrome
+    }
+    Write-Log 'Google Chrome nao encontrado nos locais padrao.' 'WARN'
+    Write-Log 'O MCP sera configurado, mas so funciona com o Chrome instalado: https://www.google.com/chrome/' 'DETAIL'
+    Add-Result $Step 'Google Chrome' 'WARN' 'nao encontrado; o MCP nao conseguira abrir o navegador'
+    return $null
+}
+
+Export-ModuleMember -Function Invoke-External, Test-ClaudeCode, Find-Python, Test-Python,
+    Get-NodeInfo, Test-Node, Test-NpmNpx, Find-Chrome, Test-Chrome

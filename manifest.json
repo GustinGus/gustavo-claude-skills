@@ -20,5 +20,23 @@
     { "name": "find-animation-opportunities", "path": "skills/find-animation-opportunities" },
     { "name": "animation-vocabulary", "path": "skills/animation-vocabulary" },
     { "name": "emil-design-eng", "path": "skills/emil-design-eng" }
+  ],
+  "mcp": [
+    {
+      "name": "chrome-devtools",
+      "scope": "user",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--isolated",
+        "--no-usage-statistics",
+        "--no-performance-crux"
+      ],
+      "windowsWrapper": ["cmd", "/c"],
+      "requiredArgs": ["--isolated", "--no-usage-statistics", "--no-performance-crux"],
+      "forbiddenArgs": ["--autoConnect", "--auto-connect", "--browserUrl", "--browser-url", "-u", "--wsEndpoint", "--ws-endpoint", "-w"],
+      "requires": { "node": "20.19.0", "npx": true, "chrome": true }
+    }
   ]
 }
