@@ -35,6 +35,10 @@
 .PARAMETER SkipMcp
     Nao configura servidores MCP (so as skills).
 
+.PARAMETER SkipSkills
+    Nao instala nem verifica as skills (nem cria a pasta de skills do escopo). Util com
+    -Scope Project -WithShadcn quando as skills ja estao no escopo User.
+
 .PARAMETER WithImpeccable
     Instala o Impeccable (dependencia externa opcional) pelo instalador oficial.
     Mostra o comando e pede confirmacao; com -NonInteractive so executa se -Force tambem for usado.
@@ -66,6 +70,7 @@ param(
     [switch] $Force,
     [switch] $NonInteractive,
     [switch] $SkipMcp,
+    [switch] $SkipSkills,
     [switch] $WithImpeccable,
     [switch] $WithShadcn
 )
@@ -117,7 +122,8 @@ try {
     if ($dryRun) { Write-Log 'Modo -WhatIf: nada sera alterado.' 'WARN' }
     $configSource = if ($env:CLAUDE_CONFIG_DIR) { 'CLAUDE_CONFIG_DIR' } else { 'padrao' }
     Write-Log "Pasta do Claude Code: $configDir ($configSource)" 'INFO'
-    Write-Log "Escopo: $Scope -> $skillsDir" 'INFO'
+    if ($SkipSkills) { Write-Log "Escopo: $Scope (skills puladas: -SkipSkills)" 'INFO' }
+    else { Write-Log "Escopo: $Scope -> $skillsDir" 'INFO' }
 
     # ------------------------------------------------------------ manifesto
     $manifestPath = Join-Path $RepoRoot 'manifest.json'
@@ -133,7 +139,7 @@ try {
     Write-Host ''
     Write-Log 'Pre-requisitos' 'STEP'
     $claude = Test-ClaudeCode
-    $needsPython = @($skills | Where-Object { @(Get-Prop $_ 'requires' @()) -contains 'python' }).Count -gt 0
+    $needsPython = -not $SkipSkills -and @($skills | Where-Object { @(Get-Prop $_ 'requires' @()) -contains 'python' }).Count -gt 0
     $python = $null
     if ($needsPython) { $python = Test-Python }
 
@@ -144,8 +150,16 @@ try {
         # -------------------------------------------------------- skills
         Write-Host ''
         Write-Log "Skills ($($skills.Count))" 'STEP'
-        Install-Skills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir -StateRoot $stateRoot `
-            -Force:$Force -NonInteractive:$NonInteractive
+        if ($SkipSkills) {
+            foreach ($s in $skills) {
+                Write-Log "$($s.name): pulada (-SkipSkills)." 'INFO'
+                Add-Result 'Skills' $s.name 'SKIPPED' 'pulada (-SkipSkills)'
+            }
+        }
+        else {
+            Install-Skills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir -StateRoot $stateRoot `
+                -Force:$Force -NonInteractive:$NonInteractive
+        }
 
         # -------------------------------------------------------- MCP
         # Qualquer falha aqui fica restrita ao MCP: as skills ja foram instaladas acima.
@@ -212,8 +226,10 @@ try {
             Write-Log 'Verificacao pulada no modo -WhatIf.' 'INFO'
         }
         else {
-            Test-InstalledSkills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir `
-                -OtherSkillsDir $otherSkillsDir -Python $python
+            if (-not $SkipSkills) {
+                Test-InstalledSkills -Skills $skills -RepoRoot $RepoRoot -SkillsDir $skillsDir `
+                    -OtherSkillsDir $otherSkillsDir -Python $python
+            }
             if (-not $SkipMcp -and $mcpServers.Count -gt 0) {
                 try { Test-McpServers -Servers $mcpServers }
                 catch {
