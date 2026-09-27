@@ -11,6 +11,9 @@
       --isolated --no-usage-statistics --no-performance-crux (no Windows, via "cmd /c npx").
     - Etapa 3 (opcional, -WithImpeccable): o Impeccable pelo instalador oficial
       (npx impeccable install, escopo global, sem hooks), sempre com confirmacao.
+    - Etapa 4 (opcional, -WithShadcn, so com -Scope Project): o MCP oficial do shadcn no
+      .mcp.json do projeto (npx shadcn@latest mcp init --client claude), somente se o projeto
+      ja tiver components.json. Preserva os outros servidores e restaura tudo se falhar.
     Pode ser executado quantas vezes quiser.
 
     Global:  %USERPROFILE%\.claude\skills  (ou $env:CLAUDE_CONFIG_DIR\skills)
@@ -36,11 +39,18 @@
     Instala o Impeccable (dependencia externa opcional) pelo instalador oficial.
     Mostra o comando e pede confirmacao; com -NonInteractive so executa se -Force tambem for usado.
 
+.PARAMETER WithShadcn
+    Configura o MCP oficial do shadcn no projeto (exige -Scope Project e components.json).
+    Nunca configura globalmente e nunca inicializa o shadcn em um projeto que nao o usa.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1 -WithImpeccable
+
+.EXAMPLE
+    powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope Project -ProjectPath "C:\meu-site" -WithShadcn
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope Project -ProjectPath C:\dev\meu-site -WhatIf
@@ -56,7 +66,8 @@ param(
     [switch] $Force,
     [switch] $NonInteractive,
     [switch] $SkipMcp,
-    [switch] $WithImpeccable
+    [switch] $WithImpeccable,
+    [switch] $WithShadcn
 )
 
 Set-StrictMode -Version 2.0
@@ -69,6 +80,7 @@ Import-Module (Join-Path $LibDir 'Prereqs.psm1') -Force
 Import-Module (Join-Path $LibDir 'Skills.psm1') -Force
 Import-Module (Join-Path $LibDir 'Mcp.psm1') -Force
 Import-Module (Join-Path $LibDir 'External.psm1') -Force
+Import-Module (Join-Path $LibDir 'ProjectIntegrations.psm1') -Force
 
 $dryRun = [bool]$WhatIfPreference
 
@@ -101,7 +113,7 @@ try {
     Initialize-Installer -StateRoot $stateRoot -DryRun:$dryRun
 
     Write-Host ''
-    Write-Log 'gustavo-claude-skills - instalador (skills + MCP + externas)' 'STEP'
+    Write-Log 'gustavo-claude-skills - instalador (skills + MCP + externas + projeto)' 'STEP'
     if ($dryRun) { Write-Log 'Modo -WhatIf: nada sera alterado.' 'WARN' }
     $configSource = if ($env:CLAUDE_CONFIG_DIR) { 'CLAUDE_CONFIG_DIR' } else { 'padrao' }
     Write-Log "Pasta do Claude Code: $configDir ($configSource)" 'INFO'
@@ -115,6 +127,7 @@ try {
     if ($skills.Count -eq 0) { throw 'manifest.json nao lista nenhuma skill.' }
     $mcpServers = @(Get-Prop $manifest 'mcp' @())
     $externals = @(Get-Prop $manifest 'external' @())
+    $projectIntegrations = @(Get-Prop $manifest 'projectIntegrations' @())
 
     # ------------------------------------------------------------ pre-requisitos
     Write-Host ''
@@ -171,6 +184,24 @@ try {
                 Write-Log "Dependencias externas: falha inesperada - $($_.Exception.Message)" 'ERROR'
                 Write-LogFile ($_ | Out-String)
                 Add-Result 'Externas' 'geral' 'FAILED' $_.Exception.Message
+            }
+        }
+
+        # -------------------------------------------------------- integracoes por projeto
+        # Independentes do Impeccable e do Chrome DevTools MCP; so tocam arquivos do projeto.
+        if ($projectIntegrations.Count -gt 0) {
+            Write-Host ''
+            Write-Log "Integra$([char]0x00E7)$([char]0x00F5)es por projeto ($($projectIntegrations.Count))" 'STEP'
+            $enabledProject = @()
+            if ($WithShadcn) { $enabledProject += 'shadcn-mcp' }
+            try {
+                Install-ProjectIntegrations -Integrations $projectIntegrations -Enabled $enabledProject `
+                    -Scope $Scope -ProjectPath $ProjectPath -StateRoot $stateRoot -Force:$Force -NonInteractive:$NonInteractive
+            }
+            catch {
+                Write-Log "Integracoes por projeto: falha inesperada - $($_.Exception.Message)" 'ERROR'
+                Write-LogFile ($_ | Out-String)
+                Add-Result 'Projeto' 'geral' 'FAILED' $_.Exception.Message
             }
         }
 

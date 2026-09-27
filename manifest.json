@@ -78,5 +78,52 @@
         "No primeiro uso, a skill baixa o motor do Impeccable para dentro da propria pasta ou ~/.impeccable/bin."
       ]
     }
+  ],
+  "projectIntegrations": [
+    {
+      "name": "shadcn-mcp",
+      "displayName": "shadcn MCP",
+      "optional": true,
+      "switch": "WithShadcn",
+      "projectOnly": true,
+      "scope": "project",
+      "source": "https://github.com/shadcn-ui/ui",
+      "docs": "https://ui.shadcn.com/docs/mcp",
+      "license": "MIT",
+      "install": {
+        "method": "npx",
+        "package": "shadcn",
+        "version": "latest",
+        "versionStrategy": "npx resolve shadcn@latest a cada execucao; a entrada gravada tambem usa shadcn@latest (padrao do CLI oficial)",
+        "args": ["mcp", "init", "--client", "claude"],
+        "requiredArgs": ["mcp", "init", "--client", "claude"],
+        "forbiddenArgs": []
+      },
+      "requires": { "node": "20.18.1", "npx": true, "network": true },
+      "requiresFiles": ["package.json"],
+      "detect": {
+        "file": "components.json",
+        "schemaHint": "ui.shadcn.com"
+      },
+      "config": {
+        "file": ".mcp.json",
+        "serversKey": "mcpServers",
+        "entry": "shadcn",
+        "expected": { "command": "npx", "args": ["shadcn@latest", "mcp"] }
+      },
+      "backupFiles": ["package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lock", "bun.lockb"],
+      "initHint": "npx shadcn@latest init",
+      "notes": [
+        "O comando oficial grava a entrada 'shadcn' em .mcp.json (mesclando com o que ja existe).",
+        "Ele tambem instala shadcn@latest como devDependency (altera package.json, lockfile e node_modules).",
+        "Nada e configurado globalmente; o Chrome DevTools MCP e outros servidores nao sao tocados."
+      ],
+      "futureSkill": {
+        "name": "shadcn",
+        "source": "https://github.com/shadcn-ui/ui/tree/main/skills/shadcn",
+        "install": "npx skills add shadcn/ui",
+        "status": "nao instalada; registrada como possibilidade futura"
+      }
+    }
   ]
 }

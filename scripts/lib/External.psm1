@@ -180,7 +180,7 @@ function Install-OneExternal {
     finally { Pop-Location }
     Write-LogFile "  -> exit $($run.ExitCode)"
     Write-LogFile $run.Output
-    foreach ($line in @($run.Output -split "`n" | Where-Object { $_.Trim() } | Select-Object -Last 8)) { Write-Log $line 'DETAIL' }
+    foreach ($line in @($run.Output -split "`n" | Where-Object { $_.Trim() -and $_ -notmatch '^npm (notice|warn)' } | Select-Object -Last 8)) { Write-Log $line 'DETAIL' }
 
     if ($run.ExitCode -ne 0) {
         Write-Log "${label}: o instalador oficial falhou (exit $($run.ExitCode)). Nada mais foi alterado por este script." 'ERROR'

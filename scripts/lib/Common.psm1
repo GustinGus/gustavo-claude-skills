@@ -50,12 +50,12 @@ function Write-LogFile {
     }
 }
 
-# Status possiveis: OK, INSTALLED, SKIPPED, UPDATED, WARN, PENDING, FAILED, WHATIF
+# Status possiveis: OK, INSTALLED, CONFIGURED, SKIPPED, UPDATED, WARN, PENDING, FAILED, WHATIF
 function Add-Result {
     param(
         [Parameter(Mandatory)] [string] $Step,
         [Parameter(Mandatory)] [string] $Item,
-        [Parameter(Mandatory)] [ValidateSet('OK', 'INSTALLED', 'SKIPPED', 'UPDATED', 'WARN', 'PENDING', 'FAILED', 'WHATIF')] [string] $Status,
+        [Parameter(Mandatory)] [ValidateSet('OK', 'INSTALLED', 'CONFIGURED', 'SKIPPED', 'UPDATED', 'WARN', 'PENDING', 'FAILED', 'WHATIF')] [string] $Status,
         [string] $Message = ''
     )
     $script:Results.Add([pscustomobject]@{ Step = $Step; Item = $Item; Status = $Status; Message = $Message })
@@ -65,13 +65,14 @@ function Add-Result {
 function Get-Results { return , $script:Results.ToArray() }
 
 function Write-Summary {
-    $colors = @{ OK = 'Green'; INSTALLED = 'Green'; UPDATED = 'Green'; SKIPPED = 'Gray'; WHATIF = 'Cyan'; WARN = 'Yellow'; PENDING = 'Yellow'; FAILED = 'Red' }
+    $colors = @{ OK = 'Green'; INSTALLED = 'Green'; CONFIGURED = 'Green'; UPDATED = 'Green'; SKIPPED = 'Gray'; WHATIF = 'Cyan'; WARN = 'Yellow'; PENDING = 'Yellow'; FAILED = 'Red' }
     $titles = [ordered]@{
         Instalador  = 'Instalador'
         Prereqs     = 'Pre-requisitos'
         Skills      = 'Skills'
         MCP         = 'Chrome DevTools MCP'
         Externas    = "Depend$([char]0x00EA)ncias externas"
+        Projeto     = "Integra$([char]0x00E7)$([char]0x00F5)es por projeto"
         Verificacao = 'Verificacao final'
     }
     Write-Host ''
