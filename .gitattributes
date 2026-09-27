@@ -1,4 +1,3 @@
-# ui-ux-pro-max: catalog-summary.json stores sha256 hashes of these data files,
-# so they must keep LF line endings on every platform (mirrors upstream .gitattributes).
-skills/ui-ux-pro-max/data/*.csv    text eol=lf
-skills/ui-ux-pro-max/data/*.json   text eol=lf
+# Skills are copied byte-for-byte by install.ps1 and verified by hash, so git
+# must never rewrite their line endings (ui-ux-pro-max also hashes its data files).
+skills/** -text
